@@ -1,0 +1,154 @@
+substitutions:
+  name: "wslc76goled"
+  friendly_name: "Waveshare 1.75 Oled GPS"
+  project_name: "chipcolate.sensor"
+  project_version: "1.0.0"
+
+esphome:
+  name: "${name}"
+  friendly_name: "${friendly_name}"
+  project:
+    name:     "${project_name}"
+    version:  "${project_version}"
+  # High-performance flash settings for ESP32-S3
+  platformio_options:
+    board_build.flash_mode: dio
+    board_build.f_flash:    80000000L
+    board_build.f_cpu:      240000000L
+
+# ==============================================================================
+#  HARDWARE SPECIFIC NOTE
+# ==============================================================================
+#  This configuration has been tested and verified specifically on:
+#  Device:  Waveshare ESP32-S3 1.75" Touch LCD (OLED)
+#  GPS:     Quectel LC76G with Active Antenna
+#
+#  Note: Other hardware combinations or passive antennas have not been tested
+#  and might require different tuning (especially regarding signal SNR).
+# ==============================================================================
+
+# ==============================================================================
+#  NETWORK & SYSTEM PACKAGES (EXAMPLE ONLY)
+# ==============================================================================
+#  NOTE: The following lines include external configuration files for WiFi,
+#  OTA, and Web Server management. These paths are specific to the original
+#  developer's environment.
+#
+#  -> IF YOU ARE A NEW USER: You must comment these out and provide your own
+#     'wifi:', 'ota:', and 'web_server:' configurations directly in this file 
+#     or point to your own secrets/packages.
+# ==============================================================================
+packages: 
+  ota:              !include ../packages/ota.yaml
+  wifi:             !include ../packages/wifi.yaml
+  web_server:       !include ../packages/web_server.yaml
+
+logger:
+  level: DEBUG
+
+# Import the custom LC76G I2C component from the local directory
+external_components:
+  - source:
+      type: git
+      url: https://github.com/fuzzybear62/esphome-lc76g
+    components: [ lc76g ]
+
+esp32:
+  board: esp32-s3-devkitc-1
+  cpu_frequency: 240MHz
+  flash_size: 16MB
+  framework:
+    type: esp-idf
+    sdkconfig_options:
+      # Performance optimizations for S3
+      CONFIG_ESP32S3_DEFAULT_CPU_FREQ_240:  "y"
+      CONFIG_ESP32S3_DATA_CACHE_64KB:       "y"
+      CONFIG_ESP32S3_DATA_CACHE_LINE_64B:   "y"
+
+i2c:
+  - id: bus_a
+    sda: GPIO15
+    scl: GPIO14
+    scan: true
+    # FREQUENCY NOTE:
+    # - 100kHz: Tested and fully functional (minimum baseline).
+    # - 400kHz: Recommended for optimal performance to drain the large 10KB
+    #   GPS buffer faster and reduce bus occupancy time.
+    frequency: 400kHz
+    # IMPORTANT: Extended timeout required. Reading a full 10KB buffer takes time.
+    timeout: 2s
+
+# Define sensor domains (required by ESPHome when using custom components)
+sensor:
+text_sensor:
+
+# ==============================================================================
+#  LC76G GNSS COMPONENT CONFIGURATION
+# ==============================================================================
+lc76g:
+  id: my_gps
+  i2c_id: bus_a          
+  update_interval: 2s    
+  
+  # Set to 'true' to publish raw NMEA strings to the 'raw_nmea_sensor'.
+  # Recommended: 'false' for production to save CPU and WiFi bandwidth.
+  debug: false
+  
+  latitude_sensor:
+    name: "GPS Latitude"
+    accuracy_decimals: 6                # CRITICAL: Ensures full GPS precision is displayed
+    filters:
+      - sliding_window_moving_average:  # Optional: Smooths out GPS jitter
+          window_size: 3
+          send_every: 1
+
+  longitude_sensor:
+    name: "GPS Longitude"
+    accuracy_decimals: 6                # CRITICAL: Ensures full GPS precision is displayed
+    filters:
+      - sliding_window_moving_average:
+          window_size: 3
+          send_every: 1
+
+  altitude_sensor:
+    name: "GPS Altitude"
+    accuracy_decimals: 1                # 1 decimal is sufficient for altitude (meters)
+    
+  speed_sensor:
+    name: "GPS Speed"
+    accuracy_decimals: 1
+    
+  course_sensor:
+    name: "GPS Course"
+    accuracy_decimals: 1
+
+  hdop_sensor:
+    name: "GPS HDOP"
+  satellites_sensor:
+    name: "GPS Satellites"
+  fix_sensor:
+    name: "GPS Fix"
+  date_sensor:
+    name: "GPS Date"
+  time_sensor:
+    name: "GPS Time"
+  raw_nmea_sensor:
+    name: "GPS Raw NMEA" # Only populated if debug: true
+
+button:
+  # Manual trigger to force the GPS module to perform a "Hot Start"
+  # Useful if the module has a lock but is taking too long to fix.
+  - platform: template
+    name: "GPS Force Hot Start"
+    on_press:
+      - lambda: |-
+          id(my_gps).send_hot_start();
+
+  # Standard system buttons
+  - platform: restart
+    name: "Press for Restart"
+    id:   "Restart"
+
+  - platform: safe_mode
+    name: "Press for Restart Safe Mode"
+    id:   "RestartSafeMode"
