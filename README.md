@@ -30,31 +30,6 @@ This component has been developed and tested **exclusively** on the following co
 * **Smart Crop:** prevents CPU starvation on ESP32 by processing only the latest data if the buffer overflows (>2KB).
 * **Native Integration:** exposes all data as standard ESPHome sensors (Latitude, Longitude, Speed, Time, Date, etc.).
 
----
-
-## 📦 Installation
-
-Create a folder inside your ESPHome configuration directory (e.g., `components`) and place the 3 files there:
-
-```text
-/config/esphome/
-  ├── ...
-  └── components/
-      └── lc76g/
-          ├── __init__.py
-          ├── lc76g_component.h
-          └── lc76g_component.cpp
-````
-
-In your main `yaml` configuration file, include the external component:
-
-```yaml
-external_components:
-  - source:
-      type: local
-      path: components
-```
-
 -----
 
 ## ⚙️ Configuration
@@ -62,6 +37,12 @@ external_components:
 ### Basic Example
 
 ```yaml
+external_components:
+  - source:
+      type: git
+      url: https://github.com/fuzzybear62/esphome-lc76g
+    components: [ lc76g ]
+
 i2c:
   sda: GPIO15
   scl: GPIO14
